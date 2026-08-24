@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle, XCircle, ClipboardList, RefreshCw } from 'lucide-react'
 import { registrationsApi } from '../services/api'
-import { Table, Badge, Modal, Confirm, Empty, Spinner, Pagination, toast } from '../components/UI'
+import { Table, Badge, Modal, Confirm, CredentialsModal, Empty, Spinner, Pagination, toast } from '../components/UI'
 import { format } from 'date-fns'
 
 export default function Registrations() {
@@ -13,6 +13,7 @@ export default function Registrations() {
   const [rejectModal, setRejectModal] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [confirm, setConfirm] = useState(null)
+  const [credentials, setCredentials] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const LIMIT = 20
 
@@ -32,9 +33,8 @@ export default function Registrations() {
     setActionLoading(true)
     try {
       const res = await registrationsApi.approve(id)
-      const d = res.data.data
-      toast.success(`Одобрено! Логин: ${d.login}, пароль: ${d.rawPassword} — передайте родителю (${d.parentPhone}) вручную`)
       setConfirm(null)
+      setCredentials(res.data.data)
       load()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Ошибка одобрения')
@@ -93,13 +93,13 @@ export default function Registrations() {
   ]
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Заявки на регистрацию</h1>
           <p className="text-slate-500 text-sm mt-1">Рассматривайте и одобряйте заявки студентов</p>
         </div>
-        <button onClick={load} className="btn-ghost" disabled={loading}>
+        <button onClick={load} className="btn-ghost self-start sm:self-auto" disabled={loading}>
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           Обновить
         </button>
@@ -107,12 +107,12 @@ export default function Registrations() {
 
       <div className="card">
         {/* Tabs */}
-        <div className="flex gap-1 p-4 border-b border-surface-border">
+        <div className="flex gap-1 p-4 border-b border-surface-border overflow-x-auto">
           {tabs.map(t => (
             <button
               key={t.key}
               onClick={() => { setStatus(t.key); setPage(1) }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
                 status === t.key
                   ? 'bg-brand-600/20 text-white border border-brand-500/30'
                   : 'text-slate-400 hover:text-white hover:bg-surface-hover'
@@ -173,6 +173,16 @@ export default function Registrations() {
           </div>
         </div>
       </Modal>
+
+      {/* Credentials after approve */}
+      <CredentialsModal
+        open={!!credentials}
+        onClose={() => setCredentials(null)}
+        title="Заявка одобрена"
+        login={credentials?.login}
+        password={credentials?.rawPassword}
+        hint={`Автоотправки нет — передайте логин и пароль родителю (${credentials?.parentName}, ${credentials?.parentPhone}) вручную.`}
+      />
     </div>
   )
 }

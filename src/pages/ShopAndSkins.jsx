@@ -1,8 +1,8 @@
 // ─── Shop Page ────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react'
-import { ShoppingBag, Plus, Edit2 } from 'lucide-react'
+import { ShoppingBag, Plus, Edit2, Trash2 } from 'lucide-react'
 import { shopApi, skinsApi } from '../services/api'
-import { Table, Modal, Empty, Spinner, Field, Badge, toast } from '../components/UI'
+import { Table, Modal, Confirm, Empty, Spinner, Field, Badge, toast } from '../components/UI'
 
 function ShopItemForm({ item, onSaved, onClose }) {
   const [form, setForm] = useState({
@@ -21,11 +21,12 @@ function ShopItemForm({ item, onSaved, onClose }) {
   const submit = async () => {
     setLoading(true)
     try {
+      const payload = { ...form, price_foxes: parseInt(form.price_foxes) }
       if (item?.id) {
-        await shopApi.updateItem(item.id, form)
+        await shopApi.updateItem(item.id, payload)
         toast.success('Товар обновлён')
       } else {
-        await shopApi.createItem({ ...form, price_foxes: parseInt(form.price_foxes) })
+        await shopApi.createItem(payload)
         toast.success('Товар добавлен')
       }
       onSaved?.()
@@ -36,7 +37,7 @@ function ShopItemForm({ item, onSaved, onClose }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Название">
           <input className="input" placeholder="iPhone 15 Pro"
             value={form.name} onChange={e => f('name')(e.target.value)} />
@@ -57,7 +58,7 @@ function ShopItemForm({ item, onSaved, onClose }) {
       {form.image_url && (
         <img src={form.image_url} alt="" className="w-20 h-20 object-contain rounded-lg border border-surface-border bg-surface" />
       )}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Категория">
           <input className="input" placeholder="Техника, Подписки..."
             value={form.category} onChange={e => f('category')(e.target.value)} />
@@ -90,6 +91,8 @@ export function Shop() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | 'create' | item
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -101,6 +104,19 @@ export function Shop() {
   }
 
   useEffect(() => { load() }, [])
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
+    setDeleteLoading(true)
+    try {
+      await shopApi.deleteItem(deleteConfirm.id)
+      toast.success('Товар удалён')
+      setDeleteConfirm(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Ошибка удаления')
+    } finally { setDeleteLoading(false) }
+  }
 
   const columns = [
     { key: 'name', label: 'Товар', render: r => (
@@ -127,20 +143,25 @@ export function Shop() {
       <Badge value={r.is_active ? 'active' : 'blocked'} custom={r.is_active ? 'Активен' : 'Скрыт'} />
     )},
     { key: 'actions', label: '', render: r => (
-      <button className="btn-ghost text-xs px-2 py-1" onClick={() => setModal(r)}>
-        <Edit2 size={13} /> Изменить
-      </button>
+      <div className="flex gap-1.5">
+        <button className="btn-ghost text-xs px-2 py-1" onClick={() => setModal(r)}>
+          <Edit2 size={13} /> Изменить
+        </button>
+        <button className="btn-danger text-xs px-2 py-1" onClick={() => setDeleteConfirm(r)}>
+          <Trash2 size={13} />
+        </button>
+      </div>
     )},
   ]
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Магазин</h1>
           <p className="text-slate-500 text-sm mt-1">Товары за Фоксы · {items.length} позиций</p>
         </div>
-        <button className="btn-primary" onClick={() => setModal('create')}>
+        <button className="btn-primary self-start sm:self-auto" onClick={() => setModal('create')}>
           <Plus size={15} /> Добавить товар
         </button>
       </div>
@@ -160,6 +181,16 @@ export function Shop() {
           onClose={() => setModal(null)}
         />
       </Modal>
+
+      <Confirm
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={handleDelete}
+        title="Удалить товар"
+        message={`Удалить товар "${deleteConfirm?.name}" из магазина? Если по нему уже есть заявки — бэкенд откажет и подскажет вместо этого скрыть товар (снять «Активен» в редактировании).`}
+        danger
+        loading={deleteLoading}
+      />
     </div>
   )
 }
@@ -216,7 +247,7 @@ function SkinForm({ skin, onSaved, onClose }) {
           <p className="text-xs text-slate-500">Превью образа</p>
         </div>
       )}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Field label="Цена (FOX)">
           <input className="input" type="number" min="0" placeholder="500"
             value={form.price_foxes} onChange={e => f('price_foxes')(e.target.value)} />
@@ -300,15 +331,15 @@ export function Skins() {
   ]
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Образы / Гардероб</h1>
           <p className="text-slate-500 text-sm mt-1">
             {skins.length} образов · у пользователя надет максимум один образ одновременно
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setModal('create')}>
+        <button className="btn-primary self-start sm:self-auto" onClick={() => setModal('create')}>
           <Plus size={15} /> Добавить образ
         </button>
       </div>

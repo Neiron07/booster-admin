@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react'
-import { BookOpen, Plus, Calendar, CheckCircle } from 'lucide-react'
+import { BookOpen, Plus, Calendar, CheckCircle, Edit2, Trash2 } from 'lucide-react'
 import { quizApi } from '../services/api'
-import { Table, Modal, Empty, Spinner, Field, Badge, toast } from '../components/UI'
+import { Table, Modal, Confirm, Empty, Spinner, Field, Badge, toast } from '../components/UI'
 import { format } from 'date-fns'
 
-function QuestionForm({ onCreated, onClose }) {
+function QuestionForm({ question, onSaved, onClose }) {
   const [form, setForm] = useState({
-    question: '', option_a: '', option_b: '', option_c: '', option_d: '',
-    correct: 'a', category: '', difficulty: 'medium'
+    question: question?.question || '',
+    option_a: question?.option_a || '',
+    option_b: question?.option_b || '',
+    option_c: question?.option_c || '',
+    option_d: question?.option_d || '',
+    correct: question?.correct || 'a',
+    category: question?.category || '',
+    difficulty: question?.difficulty || 'medium',
+    is_active: question?.is_active ?? true,
   })
   const [loading, setLoading] = useState(false)
   const f = k => v => setForm(p => ({ ...p, [k]: v }))
@@ -15,9 +22,15 @@ function QuestionForm({ onCreated, onClose }) {
   const submit = async () => {
     setLoading(true)
     try {
-      await quizApi.create(form)
-      toast.success('Вопрос добавлен')
-      onCreated?.()
+      if (question?.id) {
+        await quizApi.update(question.id, form)
+        toast.success('Вопрос обновлён')
+      } else {
+        const { is_active, ...createForm } = form
+        await quizApi.create(createForm)
+        toast.success('Вопрос добавлен')
+      }
+      onSaved?.()
       onClose?.()
     } catch (err) { toast.error(err.response?.data?.message || 'Ошибка') }
     finally { setLoading(false) }
@@ -37,7 +50,7 @@ function QuestionForm({ onCreated, onClose }) {
           value={form.question} onChange={e => f('question')(e.target.value)} />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {options.map(o => (
           <div key={o.key}>
             <div className="flex items-center gap-2 mb-1.5">
@@ -59,7 +72,7 @@ function QuestionForm({ onCreated, onClose }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="Категория">
           <input className="input" placeholder="IT, История, Математика..."
             value={form.category} onChange={e => f('category')(e.target.value)} />
@@ -73,23 +86,35 @@ function QuestionForm({ onCreated, onClose }) {
         </Field>
       </div>
 
+      {question?.id && (
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" className="w-4 h-4 accent-brand-500"
+            checked={form.is_active} onChange={e => f('is_active')(e.target.checked)} />
+          <span className="text-sm text-slate-300">Активен (виден студентам и доступен для планирования)</span>
+        </label>
+      )}
+
       <div className="flex gap-2 justify-end pt-2">
         <button className="btn-ghost" onClick={onClose}>Отмена</button>
         <button className="btn-primary" onClick={submit}
           disabled={loading || !form.question || !form.option_a || !form.option_b || !form.option_c || !form.option_d}>
           {loading ? <Spinner size={14} /> : <Plus size={14} />}
-          Добавить вопрос
+          {question?.id ? 'Сохранить' : 'Добавить вопрос'}
         </button>
       </div>
     </div>
   )
 }
 
-function ScheduleModal({ questions, open, onClose, onScheduled }) {
+function ScheduleModal({ questions, open, initialQuestionId, onClose, onScheduled }) {
   const [selectedIds, setSelectedIds] = useState([])
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [loading, setLoading] = useState(false)
   const MAX_QUESTIONS = 5
+
+  useEffect(() => {
+    if (open) setSelectedIds(initialQuestionId ? [initialQuestionId] : [])
+  }, [open, initialQuestionId])
 
   const toggleQuestion = (id) => {
     setSelectedIds(ids => {
@@ -157,8 +182,10 @@ function ScheduleModal({ questions, open, onClose, onScheduled }) {
 export default function Quiz() {
   const [questions, setQuestions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [addModal, setAddModal] = useState(false)
-  const [scheduleModal, setScheduleModal] = useState(false)
+  const [formModal, setFormModal] = useState(null) // null | 'create' | question
+  const [scheduleModal, setScheduleModal] = useState(null) // null | true | question (preselects that question)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -171,7 +198,19 @@ export default function Quiz() {
 
   useEffect(() => { load() }, [])
 
-  const diffColors = { easy: 'emerald', medium: 'amber', hard: 'red' }
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
+    setDeleteLoading(true)
+    try {
+      await quizApi.delete(deleteConfirm.id)
+      toast.success('Вопрос удалён')
+      setDeleteConfirm(null)
+      load()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Ошибка удаления')
+    } finally { setDeleteLoading(false) }
+  }
+
   const diffLabels = { easy: 'Лёгкий', medium: 'Средний', hard: 'Сложный' }
 
   const columns = [
@@ -193,28 +232,43 @@ export default function Quiz() {
     { key: 'created_at', label: 'Добавлен', render: r => (
       <span className="text-xs text-slate-500">{format(new Date(r.created_at), 'dd.MM.yyyy')}</span>
     )},
-    { key: 'schedule', label: '', render: r => (
-      <button className="btn-ghost text-xs px-2 py-1"
-        onClick={() => { setScheduleModal(true) }} title="Запланировать">
-        <Calendar size={13} />
-      </button>
+    { key: 'is_active', label: 'Статус', render: r => (
+      <Badge value={r.is_active ? 'active' : 'blocked'} custom={r.is_active ? 'Активен' : 'Скрыт'} />
+    )},
+    { key: 'actions', label: '', render: r => (
+      <div className="flex gap-1.5">
+        {r.is_active !== false && (
+          <button className="btn-ghost text-xs px-2 py-1"
+            onClick={() => setScheduleModal(r)} title="Запланировать этот вопрос">
+            <Calendar size={13} />
+          </button>
+        )}
+        <button className="btn-ghost text-xs px-2 py-1"
+          onClick={() => setFormModal(r)} title="Редактировать">
+          <Edit2 size={13} />
+        </button>
+        <button className="btn-danger text-xs px-2 py-1"
+          onClick={() => setDeleteConfirm(r)} title="Удалить">
+          <Trash2 size={13} />
+        </button>
+      </div>
     )},
   ]
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Daily Quiz</h1>
           <p className="text-slate-500 text-sm mt-1">
             {questions.length} вопросов в базе · до 5 вопросов в день · до 100 FOX / 250 EXP суммарно
           </p>
         </div>
-        <div className="flex gap-2">
-          <button className="btn-ghost" onClick={() => setScheduleModal(true)}>
-            <Calendar size={15} /> Запланировать
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-ghost flex-1 sm:flex-none justify-center" onClick={() => setScheduleModal(true)}>
+            <Calendar size={15} /> Запланировать квиз
           </button>
-          <button className="btn-primary" onClick={() => setAddModal(true)}>
+          <button className="btn-primary flex-1 sm:flex-none justify-center" onClick={() => setFormModal('create')}>
             <Plus size={15} /> Добавить вопрос
           </button>
         </div>
@@ -239,16 +293,36 @@ export default function Quiz() {
         </div>
         <Table columns={columns} data={questions} loading={loading}
           empty={<Empty icon={BookOpen} title="Вопросов нет" description="Добавьте первый вопрос для квиза"
-            action={<button className="btn-primary" onClick={() => setAddModal(true)}><Plus size={14} />Добавить</button>} />}
+            action={<button className="btn-primary" onClick={() => setFormModal('create')}><Plus size={14} />Добавить</button>} />}
         />
       </div>
 
-      <Modal open={addModal} onClose={() => setAddModal(false)} title="Новый вопрос" width="max-w-2xl">
-        <QuestionForm onCreated={load} onClose={() => setAddModal(false)} />
+      <Modal open={!!formModal} onClose={() => setFormModal(null)}
+        title={formModal === 'create' ? 'Новый вопрос' : 'Редактировать вопрос'} width="max-w-2xl">
+        <QuestionForm
+          question={formModal !== 'create' ? formModal : null}
+          onSaved={load}
+          onClose={() => setFormModal(null)}
+        />
       </Modal>
 
-      <ScheduleModal questions={questions} open={scheduleModal}
-        onClose={() => setScheduleModal(false)} onScheduled={load} />
+      <ScheduleModal
+        questions={questions.filter(q => q.is_active !== false)}
+        open={!!scheduleModal}
+        initialQuestionId={scheduleModal && scheduleModal !== true ? scheduleModal.id : null}
+        onClose={() => setScheduleModal(null)}
+        onScheduled={load}
+      />
+
+      <Confirm
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        onConfirm={handleDelete}
+        title="Удалить вопрос"
+        message={`Удалить вопрос "${deleteConfirm?.question}"? Если по нему уже есть ответы учеников или он стоит в расписании — бэкенд откажет и подскажет вместо этого скрыть его (снять «Активен» в редактировании).`}
+        danger
+        loading={deleteLoading}
+      />
     </div>
   )
 }

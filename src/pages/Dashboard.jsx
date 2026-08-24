@@ -53,7 +53,7 @@ export default function Dashboard() {
   )
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Дашборд</h1>
@@ -63,7 +63,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           icon={Users}
           label="Всего студентов"
@@ -166,16 +166,16 @@ export default function Dashboard() {
           </div>
           <div className="divide-y divide-surface-border">
             {pending.map(r => (
-              <div key={r.id} className="flex items-center gap-4 px-5 py-3">
-                <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center text-sm font-bold text-brand-400">
+              <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+                <div className="w-8 h-8 rounded-lg bg-surface-hover flex items-center justify-center text-sm font-bold text-brand-400 shrink-0">
                   {r.full_name[0]}
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-[10rem]">
                   <p className="text-sm font-medium text-white">{r.full_name}</p>
                   <p className="text-xs text-slate-500">{r.parent_phone} · {r.grade}</p>
                 </div>
                 <Badge value="pending" />
-                <a href="/registrations" className="btn-primary text-xs px-3 py-1.5">Рассмотреть</a>
+                <a href="/registrations" className="btn-primary text-xs px-3 py-1.5 shrink-0">Рассмотреть</a>
               </div>
             ))}
           </div>

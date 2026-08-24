@@ -73,6 +73,8 @@ export const usersApi = {
 export const quizApi = {
   getQuestions: (params) => api.get('/admin/quiz/questions', { params }),
   create:       (data) => api.post('/admin/quiz/questions', data),
+  update:       (id, data) => api.put(`/admin/quiz/questions/${id}`, data),
+  delete:       (id) => api.delete(`/admin/quiz/questions/${id}`),
   schedule:     (quiz_date, question_ids) => api.post('/admin/quiz/schedule', { quiz_date, question_ids }),
 }
 
@@ -86,6 +88,7 @@ export const shopApi = {
   getItems:   () => api.get('/shop'),
   createItem: (data) => api.post('/admin/shop/items', data),
   updateItem: (id, data) => api.put(`/admin/shop/items/${id}`, data),
+  deleteItem: (id) => api.delete(`/admin/shop/items/${id}`),
 }
 
 // ── Skins ─────────────────────────────────────────────────────

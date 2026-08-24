@@ -22,19 +22,19 @@ export function Leaderboard() {
   const medals = ['🥇', '🥈', '🥉']
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Лидерборд</h1>
           <p className="text-slate-500 text-sm mt-1">Рейтинг по EXP · сбрасывается 1-го числа каждого месяца</p>
         </div>
-        <button onClick={load} className="btn-ghost" disabled={loading}>
+        <button onClick={load} className="btn-ghost self-start sm:self-auto" disabled={loading}>
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Обновить
         </button>
       </div>
 
       {/* Info */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Обновление', value: '1-го числа', sub: 'каждого месяца', icon: '📅' },
           { label: 'Показатель', value: 'EXP', sub: 'опыт игрока', icon: '⚡' },
@@ -122,13 +122,13 @@ export function Games() {
   useEffect(() => { load() }, [])
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Мини-игры</h1>
           <p className="text-slate-500 text-sm mt-1">{games.length} игр · лимит {dailyLimit ?? 100} FOX в день за все игры вместе</p>
         </div>
-        <button onClick={load} className="btn-ghost" disabled={loading}>
+        <button onClick={load} className="btn-ghost self-start sm:self-auto" disabled={loading}>
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Обновить
         </button>
       </div>

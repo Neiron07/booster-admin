@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Users, Search, UserPlus, Lock, Unlock, Zap, Key,
   TrendingUp, RefreshCw
 } from 'lucide-react'
 import { usersApi } from '../services/api'
-import { Table, Badge, Modal, Confirm, Empty, Spinner, Pagination, Field, toast } from '../components/UI'
+import { Table, Badge, Modal, Confirm, CredentialsBlock, CredentialsModal, Empty, Spinner, Pagination, Field, toast } from '../components/UI'
 import { format } from 'date-fns'
 
 function UserDetail({ user, onClose }) {
@@ -64,9 +64,9 @@ function UserDetail({ user, onClose }) {
             ['Дата регистрации', user.created_at ? format(new Date(user.created_at), 'dd.MM.yyyy') : '—'],
             ['Последний вход', user.last_login_at ? format(new Date(user.last_login_at), 'dd.MM.yyyy HH:mm') : 'Ещё не входил'],
           ].map(([label, value]) => (
-            <div key={label} className="flex justify-between py-2 border-b border-surface-border last:border-0">
-              <span className="text-xs text-slate-500">{label}</span>
-              <span className="text-sm text-slate-200 font-medium">{value}</span>
+            <div key={label} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 py-2 border-b border-surface-border last:border-0">
+              <span className="text-xs text-slate-500 shrink-0">{label}</span>
+              <span className="text-sm text-slate-200 font-medium text-right break-words">{value}</span>
             </div>
           ))}
         </div>
@@ -136,18 +136,15 @@ function CreateUserModal({ open, onClose, onCreated }) {
   const reset = () => { setForm({ full_name: '', grade: '', parent_name: '', parent_phone: '' }); setResult(null) }
 
   return (
-    <Modal open={open} onClose={() => { onClose(); reset() }} title="Создать пользователя">
+    <Modal open={open} onClose={() => { onClose(); reset() }} title="Создать пользователя" closeOnBackdrop={!result}>
       {result ? (
         <div className="space-y-4">
-          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-center">
-            <div className="text-2xl mb-2">✅</div>
-            <p className="font-semibold text-white">Логин: {result.login}</p>
-            <p className="text-xs text-slate-400 mt-1">Автоотправки нет — передайте логин и пароль родителю ({result.parentPhone}) вручную</p>
-          </div>
-          <div className="bg-surface rounded-lg p-3 font-mono text-sm text-center text-fox-400 border border-surface-border">
-            Пароль: <strong>{result.rawPassword}</strong>
-          </div>
-          <button className="btn-primary w-full justify-center" onClick={() => { reset(); onClose() }}>Готово</button>
+          <CredentialsBlock
+            login={result.login}
+            password={result.rawPassword}
+            hint={`Автоотправки нет — передайте логин и пароль родителю (${result.parentName}, ${result.parentPhone}) вручную.`}
+          />
+          <button className="btn-primary w-full justify-center" onClick={() => { reset(); onClose() }}>Готово, сохранил(а)</button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -186,25 +183,44 @@ export default function UsersPage() {
   const [total, setTotal]     = useState(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage]       = useState(1)
   const [selected, setSelected] = useState(null)
   const [createModal, setCreateModal] = useState(false)
   const [confirmBlock, setConfirmBlock] = useState(null)
   const [confirmReset, setConfirmReset] = useState(null)
+  const [resetResult, setResetResult] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const LIMIT = 20
+  const requestId = useRef(0)
 
+  // Сброс страницы и загрузка данных иногда срабатывают в один и тот же
+  // коммит (debouncedSearch/statusFilter меняются => сброс page => новая
+  // загрузка) — без этой защиты более медленный "устаревший" запрос мог бы
+  // прийти позже актуального и на миг подменить данные в таблице.
   const load = async () => {
+    const id = ++requestId.current
     setLoading(true)
     try {
-      const res = await usersApi.getAll({ search, status: statusFilter, limit: LIMIT, offset: (page-1)*LIMIT })
+      const res = await usersApi.getAll({ search: debouncedSearch, status: statusFilter, limit: LIMIT, offset: (page-1)*LIMIT })
+      if (id !== requestId.current) return
       setData(res.data.users); setTotal(res.data.total)
-    } catch { toast.error('Не удалось загрузить пользователей') }
-    finally { setLoading(false) }
+    } catch {
+      if (id === requestId.current) toast.error('Не удалось загрузить пользователей')
+    } finally {
+      if (id === requestId.current) setLoading(false)
+    }
   }
 
-  useEffect(() => { load() }, [search, statusFilter, page])
+  // Debounce поиска — иначе запрос улетает на каждое нажатие клавиши
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 400)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => { setPage(1) }, [debouncedSearch, statusFilter])
+  useEffect(() => { load() }, [debouncedSearch, statusFilter, page])
 
   const toggleBlock = async () => {
     const newStatus = confirmBlock.status === 'active' ? 'blocked' : 'active'
@@ -222,8 +238,8 @@ export default function UsersPage() {
     setActionLoading(true)
     try {
       const res = await usersApi.resetPassword(confirmReset.id)
-      toast.success(`Новый пароль: ${res.data.data.rawPassword}`)
       setConfirmReset(null)
+      setResetResult(res.data.data)
     } catch (err) { toast.error(err.response?.data?.message || 'Ошибка') }
     finally { setActionLoading(false) }
   }
@@ -271,15 +287,15 @@ export default function UsersPage() {
   ]
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Пользователи</h1>
           <p className="text-slate-500 text-sm mt-1">Всего: {total.toLocaleString()}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load} className="btn-ghost"><RefreshCw size={15} /></button>
-          <button className="btn-primary" onClick={() => setCreateModal(true)}>
+          <button className="btn-primary flex-1 sm:flex-none justify-center" onClick={() => setCreateModal(true)}>
             <UserPlus size={15} /> Создать
           </button>
         </div>
@@ -287,14 +303,14 @@ export default function UsersPage() {
 
       <div className="card">
         {/* Filters */}
-        <div className="flex gap-3 p-4 border-b border-surface-border">
+        <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-surface-border">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input className="input pl-9" placeholder="Поиск по имени, логину или телефону родителя..."
-              value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
+              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <select className="input w-40"
-            value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1) }}>
+          <select className="input sm:w-40"
+            value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">Все статусы</option>
             <option value="active">Активные</option>
             <option value="blocked">Заблокированные</option>
@@ -335,6 +351,16 @@ export default function UsersPage() {
         title="Сбросить пароль"
         message={`Сбросить пароль для ${confirmReset?.full_name}? Это разлогинит все его устройства. Новый пароль нужно будет передать родителю вручную.`}
         loading={actionLoading}
+      />
+
+      {/* New password after reset */}
+      <CredentialsModal
+        open={!!resetResult}
+        onClose={() => setResetResult(null)}
+        title="Пароль сброшен"
+        login={resetResult?.login}
+        password={resetResult?.rawPassword}
+        hint="Все устройства пользователя разлогинены. Передайте новый пароль родителю вручную."
       />
     </div>
   )

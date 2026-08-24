@@ -11,11 +11,13 @@ import { Shop, Skins } from './pages/ShopAndSkins'
 import { Leaderboard, Games } from './pages/LeaderboardAndGames'
 import { useEffect, useState } from 'react'
 import { registrationsApi } from './services/api'
+import { Menu } from 'lucide-react'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const [pendingCount, setPendingCount] = useState(0)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (user?.role === 'admin' || user?.role === 'moderator') {
@@ -24,6 +26,8 @@ function ProtectedLayout() {
         .catch(() => {})
     }
   }, [user])
+
+  useEffect(() => { setSidebarOpen(false) }, [location.pathname])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-surface">
@@ -39,20 +43,35 @@ function ProtectedLayout() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar pendingCount={pendingCount} />
-      <main className="flex-1 overflow-y-auto">
-        <Routes>
-          <Route path="/"              element={<Dashboard />} />
-          <Route path="/registrations" element={<Registrations />} />
-          <Route path="/users"         element={<Users />} />
-          <Route path="/quiz"          element={<Quiz />} />
-          <Route path="/games"         element={<Games />} />
-          <Route path="/shop"          element={<Shop />} />
-          <Route path="/skins"         element={<Skins />} />
-          <Route path="/leaderboard"   element={<Leaderboard />} />
-          <Route path="*"              element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+      <Sidebar pendingCount={pendingCount} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile topbar */}
+        <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-surface-card border-b border-surface-border">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-1 rounded-lg hover:bg-surface-hover text-slate-300"
+          >
+            <Menu size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🦊</span>
+            <p className="font-bold text-white text-sm">Booster Admin</p>
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <Routes>
+            <Route path="/"              element={<Dashboard />} />
+            <Route path="/registrations" element={<Registrations />} />
+            <Route path="/users"         element={<Users />} />
+            <Route path="/quiz"          element={<Quiz />} />
+            <Route path="/games"         element={<Games />} />
+            <Route path="/shop"          element={<Shop />} />
+            <Route path="/skins"         element={<Skins />} />
+            <Route path="/leaderboard"   element={<Leaderboard />} />
+            <Route path="*"              element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
     </div>
   )
 }
